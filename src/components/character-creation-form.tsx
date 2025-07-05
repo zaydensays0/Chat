@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -26,6 +27,13 @@ const formSchema = z.object({
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+interface Character {
+    id: string;
+    name: string;
+    persona: string;
+    avatarUrl: string;
+}
 
 export default function CharacterCreationForm() {
   const router = useRouter();
@@ -71,20 +79,27 @@ export default function CharacterCreationForm() {
 
   const onSubmit = (data: FormData) => {
     const persona = `Name: ${data.name}\n\nBackstory: ${data.backstory}\n\nPersonality: ${data.personality}\n\nDialogue Style: ${data.dialogueStyle}\n\nAppearance for reference: ${data.appearance}`;
-    const character = {
+    
+    const newCharacter: Character = {
+      id: Date.now().toString(), // Simple unique ID
       name: data.name,
       persona,
       avatarUrl,
     };
+
     try {
-        sessionStorage.setItem('character', JSON.stringify(character));
-        router.push('/chat');
+        const storedCharacters = localStorage.getItem('characters');
+        const characters: Character[] = storedCharacters ? JSON.parse(storedCharacters) : [];
+        characters.push(newCharacter);
+        localStorage.setItem('characters', JSON.stringify(characters));
+        
+        router.push(`/chat/${newCharacter.id}`);
     } catch (error) {
-        console.error("Could not save to session storage", error);
+        console.error("Could not save to localStorage", error);
         toast({
             variant: "destructive",
-            title: "Could not start chat",
-            description: "There was an error saving your character. Your browser might not support session storage or it is full."
+            title: "Could not save character",
+            description: "There was an error saving your character. Your browser might not support localStorage or it is full."
         })
     }
   };
@@ -201,8 +216,8 @@ export default function CharacterCreationForm() {
 
           </CardContent>
           <CardFooter>
-            <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-              Start Chatting
+            <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting || !form.formState.isValid}>
+              Create Character & Start Chatting
               <Sparkles className="ml-2 h-4 w-4" />
             </Button>
           </CardFooter>
