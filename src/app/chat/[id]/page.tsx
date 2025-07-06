@@ -65,9 +65,13 @@ export default function ChatPage() {
             setCharacter(currentCharacter);
             const storedMessages = localStorage.getItem(`chatHistory_${characterId}`);
             if (storedMessages) {
-                setMessages(JSON.parse(storedMessages));
+                const parsedMessages = JSON.parse(storedMessages);
+                if (Array.isArray(parsedMessages)) {
+                    // Filter out any potential malformed messages from localStorage
+                    setMessages(parsedMessages.filter(m => m && m.id));
+                }
             } else {
-                setMessages([{ id: `model-initial-${Date.now()}`, role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
+                setMessages([{ id: `model-initial-${Date.now()}-${Math.random()}`, role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
             }
         } else {
              toast({
@@ -118,7 +122,7 @@ export default function ChatPage() {
       if (!input.trim() || isResponding || !character) return;
 
       const userMessage: Message = {
-        id: `user-${Date.now()}`,
+        id: `user-${Date.now()}-${Math.random()}`,
         role: 'user',
         content: input,
       };
@@ -142,10 +146,10 @@ export default function ChatPage() {
               title: 'Uh oh! Something went wrong.',
               description: result.error,
           });
-          setMessages(prev => [...prev, { id: `model-error-${Date.now()}`, role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
+          setMessages(prev => [...prev, { id: `model-error-${Date.now()}-${Math.random()}`, role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
       } else {
           const botMessage: Message = {
-            id: `model-${Date.now()}`,
+            id: `model-${Date.now()}-${Math.random()}`,
             role: 'model',
             content: result.message!,
           };
