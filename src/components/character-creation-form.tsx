@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { generateAvatarAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles, User, Wand2 } from 'lucide-react';
+import { Loader2, Sparkles, User, Wand2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from './ui/skeleton';
 
@@ -40,6 +40,8 @@ export default function CharacterCreationForm() {
   const { toast } = useToast();
   const [isAvatarGenerating, startAvatarGeneration] = useTransition();
   const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -76,6 +78,23 @@ export default function CharacterCreationForm() {
       }
     });
   };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUri = e.target?.result as string;
+        setAvatarUrl(dataUri);
+        toast({
+            title: 'Avatar Uploaded!',
+            description: 'Your custom avatar has been set.',
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
 
   const onSubmit = (data: FormData) => {
     const persona = `Name: ${data.name}\n\nBackstory: ${data.backstory}\n\nPersonality: ${data.personality}\n\nDialogue Style: ${data.dialogueStyle}\n\nAppearance for reference: ${data.appearance}`;
@@ -181,11 +200,11 @@ export default function CharacterCreationForm() {
                             name="appearance"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Appearance Description</FormLabel>
+                                <FormLabel>1. Appearance Description</FormLabel>
                                 <FormControl>
                                     <Textarea placeholder="e.g., Long, wavy silver hair, bright emerald green eyes, and a sprinkle of freckles across her nose..." {...field} rows={5} />
                                 </FormControl>
-                                <FormDescription>This will be used to generate the avatar.</FormDescription>
+                                <FormDescription>Used for AI avatar generation.</FormDescription>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -194,6 +213,19 @@ export default function CharacterCreationForm() {
                             {isAvatarGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                             Generate Avatar
                         </Button>
+                        <div className="relative flex items-center py-2">
+                            <div className="flex-grow border-t border-muted"></div>
+                            <span className="flex-shrink mx-4 text-xs text-muted-foreground">OR</span>
+                            <div className="flex-grow border-t border-muted"></div>
+                        </div>
+                        <div>
+                            <FormLabel className="sr-only">2. Upload Custom Avatar</FormLabel>
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+                                <Upload className="mr-2 h-4 w-4" />
+                                Upload an Image
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="flex flex-col items-center justify-center space-y-2">
@@ -206,7 +238,7 @@ export default function CharacterCreationForm() {
                             ) : (
                                 <div className="text-center text-muted-foreground p-4">
                                     <User className="h-10 w-10 mx-auto" />
-                                    <p className="text-xs mt-2">Your AI-generated avatar will appear here.</p>
+                                    <p className="text-xs mt-2">Generate or upload an avatar.</p>
                                 </div>
                             )}
                         </div>
