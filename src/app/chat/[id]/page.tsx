@@ -58,7 +58,10 @@ export default function ChatPage() {
         const currentCharacter = characters.find(c => c.id === characterId);
         if(currentCharacter) {
             setCharacter(currentCharacter);
-            if (messages.length === 0) {
+            const storedMessages = localStorage.getItem(`chatHistory_${characterId}`);
+            if (storedMessages) {
+                setMessages(JSON.parse(storedMessages));
+            } else {
                 setMessages([{ role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
             }
         } else {
@@ -73,12 +76,18 @@ export default function ChatPage() {
         router.replace('/');
       }
     } catch (error) {
-      console.error('Failed to parse character data from localStorage', error);
+      console.error('Failed to parse data from localStorage', error);
       router.replace('/');
     } finally {
       setIsLoading(false);
     }
-  }, [params.id, router, toast, messages.length]);
+  }, [params.id, router, toast]);
+
+  useEffect(() => {
+    if (character?.id && messages.length > 0) {
+        localStorage.setItem(`chatHistory_${character.id}`, JSON.stringify(messages));
+    }
+  }, [messages, character]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -102,9 +111,9 @@ export default function ChatPage() {
               title: 'Uh oh! Something went wrong.',
               description: result.error,
           });
-          setMessages([...newMessages, { role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
+          setMessages(prev => [...prev, { role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
       } else {
-          setMessages([...newMessages, { role: 'model', content: result.message! }]);
+          setMessages(prev => [...prev, { role: 'model', content: result.message! }]);
       }
   }
 
