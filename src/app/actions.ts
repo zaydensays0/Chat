@@ -4,6 +4,9 @@ import { generateAvatar } from '@/ai/flows/generate-avatar';
 import { chat, type ChatInput } from '@/ai/flows/chat';
 
 export async function generateAvatarAction(characterDescription: string) {
+  if (process.env.NODE_ENV === 'production' && !process.env.GOOGLE_API_KEY) {
+    return { error: "It looks like you're running in a production environment, but the GOOGLE_API_KEY is missing. Please set it in your hosting provider's environment variables to enable AI features." };
+  }
   if (!characterDescription.trim()) {
     return { error: 'Please provide an appearance description to generate an avatar.' };
   }
@@ -21,6 +24,9 @@ export async function generateAvatarAction(characterDescription: string) {
 }
 
 export async function chatAction(input: ChatInput) {
+  if (process.env.NODE_ENV === 'production' && !process.env.GOOGLE_API_KEY) {
+    return { error: "It looks like you're running in a production environment, but the GOOGLE_API_KEY is missing. Please set it in your hosting provider's environment variables to enable AI features." };
+  }
   if (!input.persona || !input.history.length) {
     return { error: 'Invalid input for chat action.' };
   }
