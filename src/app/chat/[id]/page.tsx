@@ -8,9 +8,9 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, CornerDownLeft, User, ArrowLeft } from 'lucide-react';
+import { Send, CornerDownLeft, User, ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { chatAction } from '@/app/actions';
+import { chatAction, generateChatImageAction } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,8 +22,13 @@ interface Character {
 }
 
 interface Message {
+    id: string;
     role: 'user' | 'model';
     content: string;
+    imageUrl?: string;
+    imagePrompt?: string;
+    isGeneratingImage?: boolean;
+    imageError?: boolean;
 }
 
 export default function ChatPage() {
@@ -62,7 +67,7 @@ export default function ChatPage() {
             if (storedMessages) {
                 setMessages(JSON.parse(storedMessages));
             } else {
-                setMessages([{ role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
+                setMessages([{ id: `model-initial-${Date.now()}`, role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
             }
         } else {
              toast({
@@ -85,22 +90,48 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (character?.id && messages.length > 0) {
-        localStorage.setItem(`chatHistory_${character.id}`, JSON.stringify(messages));
+        // Don't save transient UI states to localStorage
+        const messagesToStore = messages.map(({ isGeneratingImage, imageError, ...rest }) => rest);
+        localStorage.setItem(`chatHistory_${character.id}`, JSON.stringify(messagesToStore));
     }
   }, [messages, character]);
+
+  const generateImageForMessage = async (prompt: string, messageId: string, characterPersona: string) => {
+    const imageResult = await generateChatImageAction({ prompt, characterPersona });
+
+    if (imageResult.error) {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isGeneratingImage: false, imageError: true } : m));
+        toast({ title: "Image Generation Failed", description: imageResult.error, variant: "destructive" });
+    } else {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isGeneratingImage: false, imageUrl: imageResult.imageDataUri, imageError: false } : m));
+    }
+  };
+
+  const handleRegenerateImage = (prompt: string, messageId: string) => {
+    if (!character) return;
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isGeneratingImage: true, imageError: false, imageUrl: undefined } : m));
+    generateImageForMessage(prompt, messageId, character.persona);
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!input.trim() || isResponding || !character) return;
 
-      const newMessages: Message[] = [...messages, { role: 'user', content: input }];
-      setMessages(newMessages);
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: input,
+      };
+
+      const newMessagesHistory = [...messages, userMessage];
+      setMessages(newMessagesHistory);
       setInput('');
       setIsResponding(true);
 
       const result = await chatAction({
           persona: character.persona,
-          history: newMessages,
+          // Pass full history with the new user message for context
+          history: newMessagesHistory.map(({id, ...rest}) => ({...rest, content: rest.content || ''})),
       });
 
       setIsResponding(false);
@@ -111,9 +142,22 @@ export default function ChatPage() {
               title: 'Uh oh! Something went wrong.',
               description: result.error,
           });
-          setMessages(prev => [...prev, { role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
+          setMessages(prev => [...prev, { id: `model-error-${Date.now()}`, role: 'model', content: "Sorry, I'm having a little trouble thinking right now. Could you say that again?" }]);
       } else {
-          setMessages(prev => [...prev, { role: 'model', content: result.message! }]);
+          const botMessage: Message = {
+            id: `model-${Date.now()}`,
+            role: 'model',
+            content: result.message!,
+          };
+
+          if (result.imageRequest && result.imagePrompt) {
+              botMessage.isGeneratingImage = true;
+              botMessage.imagePrompt = result.imagePrompt;
+              setMessages(prev => [...prev, botMessage]);
+              generateImageForMessage(result.imagePrompt, botMessage.id, character.persona);
+          } else {
+              setMessages(prev => [...prev, botMessage]);
+          }
       }
   }
 
@@ -150,16 +194,47 @@ export default function ChatPage() {
         </div>
       </header>
       <main className="flex-1 space-y-4 overflow-y-auto p-4">
-        {messages.map((message, index) => (
-            <div key={index} className={cn("flex items-start gap-3", message.role === 'user' && 'justify-end')}>
+        {messages.map((message) => (
+            <div key={message.id} className={cn("flex items-start gap-3", message.role === 'user' && 'justify-end')}>
                 {message.role === 'model' && (
                      <Avatar className="h-9 w-9">
                         <AvatarImage src={character.avatarUrl} alt={character.name} />
                         <AvatarFallback>{character.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                 )}
-                 <div className={cn("max-w-md rounded-lg p-3", message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                 <div className={cn("max-w-xs md:max-w-md rounded-lg p-3", message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
+                    {message.content && <p className="text-sm whitespace-pre-wrap">{message.content}</p>}
+                    <div className="mt-2 space-y-2">
+                        {message.isGeneratingImage && (
+                            <div className="space-y-2">
+                                <Skeleton className="h-48 w-full rounded-md" />
+                                <p className="text-xs text-center text-muted-foreground animate-pulse">Generating image...</p>
+                            </div>
+                        )}
+                        {message.imageUrl && !message.isGeneratingImage && (
+                            <div className="group relative">
+                                <Image src={message.imageUrl} alt="Generated image" width={400} height={400} className="rounded-lg max-w-full h-auto"/>
+                                <Button 
+                                    onClick={() => handleRegenerateImage(message.imagePrompt!, message.id)}
+                                    variant="secondary"
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <RefreshCw className="h-4 w-4"/>
+                                    <span className="sr-only">Regenerate Image</span>
+                                </Button>
+                            </div>
+                        )}
+                        {message.imageError && !message.isGeneratingImage && (
+                            <div className="mt-2 text-destructive-foreground bg-destructive/80 p-3 rounded-md flex flex-col items-center gap-2">
+                                <AlertTriangle className="h-6 w-6"/>
+                                <p className="text-sm font-semibold">Failed to generate image.</p>
+                                <Button variant="ghost" size="sm" className="h-auto p-1 text-current underline" onClick={() => handleRegenerateImage(message.imagePrompt!, message.id)}>
+                                    Try Again
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                  </div>
                 {message.role === 'user' && (
                     <Avatar className="h-9 w-9 bg-muted">
@@ -204,4 +279,3 @@ export default function ChatPage() {
     </div>
   );
 }
-

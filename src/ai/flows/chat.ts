@@ -22,7 +22,9 @@ const ChatInputSchema = z.object({
 export type ChatInput = z.infer<typeof ChatInputSchema>;
 
 const ChatOutputSchema = z.object({
-  message: z.string().describe("The AI character's response."),
+  message: z.string().describe("The AI character's response to the user."),
+  imageRequest: z.boolean().describe("Set to true if the user's last message is requesting an image of you (the AI character). Otherwise, set to false."),
+  imagePrompt: z.string().optional().describe("If imageRequest is true, provide a detailed, descriptive text-to-image prompt to generate the requested image. This prompt should incorporate the character's appearance from their persona. Example: 'A photorealistic image of a woman with long, wavy silver hair and bright emerald green eyes, wearing a red saree, smiling warmly.'"),
 });
 export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
@@ -38,6 +40,10 @@ const chatPrompt = ai.definePrompt({
 
 Your Persona:
 {{{persona}}}
+
+You have the ability to generate an image of yourself if the user asks for one. If the user's latest message seems to be asking for a picture of you (e.g., "send a pic," "show me how you look," "can I see you in a dress?"), set the \`imageRequest\` flag to true. When you do, also generate a detailed, descriptive prompt for an image generation model in the \`imagePrompt\` field. This prompt should be based on the user's request and your persona's appearance. Also, provide a normal text response in the \`message\` field to accompany the image (e.g., "Here you go! I hope you like it.").
+
+If the user is not asking for a picture, \`imageRequest\` should be false.
 
 Conversation History (this is a record of your conversation with the user, you are the 'model'):
 {{#each history}}
