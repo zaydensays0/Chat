@@ -63,8 +63,13 @@ export async function generateChatImageAction(input: GenerateChatImageInput) {
         return { error: 'The AI failed to generate an image. Please try again.' };
         }
         return { imageDataUri: result.imageDataUri };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Chat image generation error:', error);
-        return { error: 'An unexpected error occurred while generating the image. Please try again later.' };
+        let errorMessage = 'An unexpected error occurred while generating the image. Please try again later.';
+        // Check if the error is due to content filtering
+        if (error.message && (error.message.toLowerCase().includes('safety') || error.message.toLowerCase().includes('blocked'))) {
+            errorMessage = 'The image request was blocked for safety reasons. Please try a different prompt.';
+        }
+        return { error: errorMessage };
     }
 }
