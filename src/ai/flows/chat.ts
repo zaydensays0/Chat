@@ -69,6 +69,10 @@ Based on the persona and history, provide your next response as 'model'. Do not 
                 category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
                 threshold: 'BLOCK_NONE',
             },
+            {
+                category: 'HARM_CATEGORY_CIVIC_INTEGRITY',
+                threshold: 'BLOCK_NONE',
+            },
         ]
     }
 });
