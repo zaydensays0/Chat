@@ -68,7 +68,17 @@ export default function ChatPage() {
                 const parsedMessages = JSON.parse(storedMessages);
                 if (Array.isArray(parsedMessages)) {
                     // Filter out any potential malformed messages from localStorage
-                    setMessages(parsedMessages.filter(m => m && m.id));
+                    const finalMessages = parsedMessages
+                      .filter(m => m && m.id)
+                      .map(m => {
+                        // If a message has a prompt but no URL, it means the image wasn't saved.
+                        // We can mark it with `imageError` to show the 'Try Again' button.
+                        if (m.role === 'model' && m.imagePrompt && !m.imageUrl) {
+                          return { ...m, imageError: true };
+                        }
+                        return m;
+                      });
+                    setMessages(finalMessages);
                 }
             } else {
                 setMessages([{ id: `model-initial-${Date.now()}-${Math.random()}`, role: 'model', content: `Hello! I'm ${currentCharacter.name}. It's so nice to finally meet you. What's on your mind?`}]);
@@ -94,11 +104,28 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (character?.id && messages.length > 0) {
-        // Don't save transient UI states to localStorage
-        const messagesToStore = messages.map(({ isGeneratingImage, imageError, ...rest }) => rest);
-        localStorage.setItem(`chatHistory_${character.id}`, JSON.stringify(messagesToStore));
+        // Don't save transient UI states or large image data to localStorage to avoid quota errors.
+        const messagesToStore = messages.map(({ isGeneratingImage, imageError, imageUrl, ...rest }) => rest);
+        try {
+          localStorage.setItem(`chatHistory_${character.id}`, JSON.stringify(messagesToStore));
+        } catch (error) {
+          if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+            toast({
+              variant: "destructive",
+              title: "Could not save chat history",
+              description: "Your browser's storage is full. Older messages may not be saved."
+            });
+          } else {
+            console.error("Failed to save chat history to localStorage", error);
+            toast({
+                variant: "destructive",
+                title: "Could not save chat history",
+                description: "There was an error saving your chat."
+            });
+          }
+        }
     }
-  }, [messages, character]);
+  }, [messages, character, toast]);
 
   const generateImageForMessage = async (prompt: string, messageId: string, characterPersona: string) => {
     const imageResult = await generateChatImageAction({ prompt, characterPersona });
